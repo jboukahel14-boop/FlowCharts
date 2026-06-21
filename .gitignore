@@ -1,0 +1,25 @@
+node_modules/
+frontend/dist/
+.vite/
+*.log
+.env
+.env.local
+.env.production
+
+# PHP
+/vendor/
+backend/.env
+backend/.env.*
+backend/storage/
+backend/bootstrap/cache/
+*.cache
+composer.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
