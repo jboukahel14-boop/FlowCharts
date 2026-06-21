@@ -190,7 +190,10 @@ export const useWorkflowStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await workflowApi.getWorkflow(workflowId);
-      const workflow = response.data.data;
+      const workflow = response?.data?.data;
+      if (!workflow) {
+        throw new Error('Workflow not found in response');
+      }
       set({
         nodes: workflow.nodes || [],
         edges: workflow.edges || [],
@@ -200,7 +203,7 @@ export const useWorkflowStore = create((set, get) => ({
         isDirty: false,
       });
     } catch (err) {
-      const message = err.response?.data?.message || 'Failed to load workflow';
+      const message = err.response?.data?.message || err.message || 'Failed to load workflow';
       set({ isLoading: false, error: message });
       throw new Error(message);
     }

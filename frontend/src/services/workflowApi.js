@@ -12,7 +12,13 @@ const http = axios.create({
 });
 
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (!isJsonResponse(response)) {
+      backendReady = false;
+      return Promise.reject(new Error('Non-JSON response — backend unavailable'));
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       window.location.href = '/login';
@@ -23,15 +29,34 @@ http.interceptors.response.use(
 
 let backendReady = null;
 
+function isJsonResponse(response) {
+  const contentType = response.headers?.['content-type'] || '';
+  return contentType.includes('application/json');
+}
+
 async function checkBackend() {
   if (backendReady !== null) return backendReady;
   try {
-    await http.get('/workflows', { params: { per_page: 1 }, timeout: 3000 });
-    backendReady = true;
+    const response = await http.get('/workflows', { params: { per_page: 1 }, timeout: 3000 });
+    backendReady = isJsonResponse(response) && Array.isArray(response.data?.data);
   } catch {
     backendReady = false;
   }
   return backendReady;
+}
+
+async function apiCall(target, prop, args) {
+  if (backendReady === null) {
+    await checkBackend();
+  }
+  if (backendReady) {
+    return await target[prop](...args);
+  }
+  const fallback = localWorkflowApi[prop];
+  if (fallback) {
+    return await fallback(...args);
+  }
+  throw new Error(`API unavailable: ${prop}`);
 }
 
 function createFallbackProxy(api) {
@@ -39,18 +64,15 @@ function createFallbackProxy(api) {
     get(target, prop) {
       return async (...args) => {
         try {
-          const online = await checkBackend();
-          if (online) {
-            const response = await target[prop](...args);
-            return response;
+          return await apiCall(target, prop, args);
+        } catch {
+          const fallback = localWorkflowApi[prop];
+          if (fallback) {
+            console.info(`[workflowApi] Using localStorage fallback for "${prop}"`);
+            return await fallback(...args);
           }
-        } catch {}
-        const fallback = localWorkflowApi[prop];
-        if (fallback) {
-          console.info(`[workflowApi] Using localStorage fallback for "${prop}"`);
-          return await fallback(...args);
+          throw new Error(`API unavailable: ${prop}`);
         }
-        throw new Error(`API unavailable: ${prop}`);
       };
     },
   });
